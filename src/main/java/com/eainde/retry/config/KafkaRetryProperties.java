@@ -40,9 +40,32 @@ public class KafkaRetryProperties {
     private int batchSize = 100;
 
     /**
-     * A map to link a logical handler bean name (the key) to a Kafka topic name pattern (the value).
-     * This is used to find the correct handler for messages from dynamic or complex topic names.
-     * Example: kycProcessApprovalHandler -> cl.uk.*.kyc-procee-approval.rt
+     * Contains the mappings from logical handler bean names to Kafka topic patterns.
+     * This is now structured to separate consumer and producer handlers.
      */
-    private Map<String, String> handlerMappings = new HashMap<>();
+    private HandlerMappings handlerMappings = new HandlerMappings();
+
+    /**
+     * A nested class to hold separate mappings for consumer and producer failures.
+     */
+    public static class HandlerMappings {
+        private Map<String, String> consumer = new HashMap<>();
+        private Map<String, String> producer = new HashMap<>();
+
+        public Map<String, String> getConsumer() {
+            return consumer;
+        }
+
+        public void setConsumer(Map<String, String> consumer) {
+            this.consumer = consumer;
+        }
+
+        public Map<String, String> getProducer() {
+            return producer;
+        }
+
+        public void setProducer(Map<String, String> producer) {
+            this.producer = producer;
+        }
+    }
 }
