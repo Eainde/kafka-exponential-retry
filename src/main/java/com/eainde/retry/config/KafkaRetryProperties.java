@@ -3,6 +3,9 @@ package com.eainde.retry.config;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Configuration properties for the Kafka retry mechanism.
  * Allows microservices to configure retry behavior via application.yml.
@@ -35,4 +38,11 @@ public class KafkaRetryProperties {
      * The maximum number of records to fetch from the database in a single retry batch.
      */
     private int batchSize = 100;
+
+    /**
+     * A map to link a logical handler bean name (the key) to a Kafka topic name pattern (the value).
+     * This is used to find the correct handler for messages from dynamic or complex topic names.
+     * Example: kycProcessApprovalHandler -> cl.uk.*.kyc-procee-approval.rt
+     */
+    private Map<String, String> handlerMappings = new HashMap<>();
 }

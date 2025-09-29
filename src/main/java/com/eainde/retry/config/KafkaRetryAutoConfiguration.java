@@ -1,5 +1,6 @@
 package com.eainde.retry.config;
 
+import com.eainde.retry.RetryQualifierResolver;
 import com.eainde.retry.repository.FailedMessageRepository;
 import com.eainde.retry.scheduler.RetryScheduler;
 import com.eainde.retry.service.KafkaRetryService;
@@ -44,6 +45,15 @@ public class KafkaRetryAutoConfiguration {
                         .usingDbTime() // Uses the database time, which is recommended for clusters.
                         .build()
         );
+    }
+
+    /**
+     * NEW: Creates the central resolver bean for mapping topics to handlers.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RetryQualifierResolver retryQualifierResolver(KafkaRetryProperties properties) {
+        return new RetryQualifierResolver(properties);
     }
 
     /**

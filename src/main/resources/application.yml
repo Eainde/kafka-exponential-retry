@@ -1,0 +1,42 @@
+# ===================================================================
+# Kafka Retry Library Configuration
+# ===================================================================
+kafka:
+  retry:
+    # Set to true to activate the entire retry mechanism
+    enabled: true
+
+    # The first retry will happen after 5 minutes
+    initial-interval-minutes: 5
+
+    # A message will be retried a maximum of 5 times
+    max-retries: 5
+
+    # The scheduler will fetch a maximum of 100 records per run
+    batch-size: 100
+
+    # The scheduler will check for messages to retry every minute
+    cron: "0 */1 * * * *"
+
+    # --- Handler Mappings: The Core of the Routing Logic ---
+    # This section links dynamic/environment-specific topic names to
+    # the static, logical bean names of your RetryMessageHandler implementations.
+    handler-mappings:
+      # == CONSUMER EXAMPLE ==
+      # This mapping is for handling failures when CONSUMING from an order topic.
+      # If a message from 'cl.uk.prod.order-events.rt' fails, it will be
+      # routed to the Spring bean named 'orderEventsHandler'.
+      orderEventsHandler: "cl.uk.*.order-events.rt"
+
+      # == PRODUCER EXAMPLE ==
+      # This mapping is for handling failures when PRODUCING to a shipment topic.
+      # If the service tries to send a message to 'cl.uk.dev.shipment-notifications.rt'
+      # and it fails (e.g., Kafka is down), it will be saved and later routed
+      # to the Spring bean named 'shipmentNotificationHandler'.
+      shipmentNotificationHandler: "cl.uk.*.shipment-notifications.rt"
+
+      # == UNIFIED LOGIC EXAMPLE ==
+      # In some cases, the same logic might apply. For example, processing a KYC
+      # update might involve both consuming an event and producing a result.
+      # The same handler can be used for both.
+      kycUpdateHandler: "cl.uk.*.kyc-update.rt"
