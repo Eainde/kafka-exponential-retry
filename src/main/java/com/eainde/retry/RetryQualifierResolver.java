@@ -1,48 +1,46 @@
 package com.eainde.retry;
 
+import com.eainde.retry.HandlerConfig;
 import com.eainde.retry.config.KafkaRetryProperties;
 import org.springframework.util.AntPathMatcher;
 
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * A central service to resolve a Kafka topic name to a logical handler bean name (qualifier).
- * It uses the mappings configured in kafka.retry.handler-mappings.
- */
 public class RetryQualifierResolver {
-
+    // ... fields ...
     private final KafkaRetryProperties retryProperties;
-    private final AntPathMatcher pathMatcher = new AntPathMatcher("."); // Use dot as a separator
+    private final AntPathMatcher pathMatcher = new AntPathMatcher(".");
+
+    public enum FailureContext { PRODUCER, CONSUMER }
 
     public RetryQualifierResolver(KafkaRetryProperties retryProperties) {
         this.retryProperties = retryProperties;
     }
 
-    /**
-     * Matches the incoming topic against the patterns defined in application.yml
-     * to find the correct logical handler bean name.
-     * @param topic The actual topic name from the Kafka message.
-     * @return An Optional containing the logical handler name if a match is found.
-     */
-    public Optional<String> resolve(String topic) {
-        if (topic == null) {
+    public Optional<String> resolve(String topic, FailureContext context) {
+        Map<String, HandlerConfig> contextMappings = getMappingsForContext(context);
+        if (contextMappings == null) {
             return Optional.empty();
         }
 
-        Map<String, String> mappings = retryProperties.getHandlerMappings();
-        if (mappings == null) {
-            return Optional.empty();
-        }
-
-        // Iterate through the map of {handlerName -> topicPattern}
-        for (Map.Entry<String, String> entry : mappings.entrySet()) {
+        for (Map.Entry<String, HandlerConfig> entry : contextMappings.entrySet()) {
             String handlerName = entry.getKey();
-            String topicPattern = entry.getValue();
-            if (pathMatcher.match(topicPattern, topic)) {
-                return Optional.of(handlerName); // Return the logical handler name
+            HandlerConfig handlerConfig = entry.getValue();
+            if (handlerConfig != null && pathMatcher.match(handlerConfig.getTopic(), topic)) {
+                return Optional.of(handlerName);
             }
         }
-        return Optional.empty(); // No pattern matched the topic
+        return Optional.empty();
+    }
+
+    private Map<String, HandlerConfig> getMappingsForContext(FailureContext context) {
+        if (retryProperties.getHandlerMappings() == null) {
+            return null;
+        }
+        return context == FailureContext.CONSUMER ?
+                retryProperties.getHandlerMappings().get("consumer") :
+                retryProperties.getHandlerMappings().get("producer");
     }
 }
+

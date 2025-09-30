@@ -1,9 +1,12 @@
 package com.eainde.retry.config;
 
+import com.eainde.retry.HandlerConfig;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,16 +37,20 @@ public class KafkaRetryProperties {
      */
     private String cron = "0 * * * * *";
 
+
     /**
      * The maximum number of records to fetch from the database in a single retry batch.
      */
     private int batchSize = 100;
+    // Global exception lists that act as a default or fallback.
+    private List<String> nonRetryableExceptions = new ArrayList<>();
+    private List<String> retryableExceptions = new ArrayList<>();
 
     /**
      * Contains the mappings from logical handler bean names to Kafka topic patterns.
      * This is now structured to separate consumer and producer handlers.
      */
-    private HandlerMappings handlerMappings = new HandlerMappings();
+    private Map<String, Map<String, HandlerConfig>> handlerMappings = new HashMap<>();
 
     /**
      * A nested class to hold separate mappings for consumer and producer failures.
