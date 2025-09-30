@@ -18,6 +18,33 @@ kafka:
     # The scheduler will check for messages to retry every minute
     cron: "0 */1 * * * *"
 
+    # --- Exception Control Settings ---
+    # RULE 1: THE BLACKLIST (Fatal Errors)
+    # Any exception listed here (or its subclasses) will NEVER be retried.
+    # The message will be immediately marked as PERMANENT_FAILURE.
+    # This list always takes precedence.
+    non-retryable-exceptions:
+      # For bad data that will never be valid.
+      - java.lang.IllegalArgumentException
+      # For messages that cannot be deserialized.
+      - org.springframework.messaging.converter.MessageConversionException
+      # An example of a custom, non-recoverable business exception.
+      - com.mycompany.exceptions.PermanentBusinessLogicException
+
+    # RULE 2: THE WHITELIST (Transient Errors)
+    # OPTIONAL: If you define this list, ONLY exceptions listed here will be retried
+    # (as long as they are not on the blacklist).
+    # If this list is empty, then ALL exceptions not on the blacklist are retried by default.
+    retryable-exceptions:
+      # For temporary network issues.
+      - java.net.SocketTimeoutException
+      # For when a downstream REST API is temporarily unavailable.
+      - org.springframework.web.client.HttpServerErrorException
+      # For database lock conflicts that might resolve on the next attempt.
+      - org.springframework.dao.PessimisticLockingFailureException
+      # An example of a custom, recoverable business exception.
+      - com.mycompany.exceptions.TransientDataConflictException
+
     # --- Handler Mappings: The Core of the Routing Logic ---
     # This section links dynamic/environment-specific topic names to
     # the static, logical bean names of your RetryMessageHandler implementations.
