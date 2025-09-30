@@ -1,5 +1,7 @@
 package com.eainde.retry.config;
 
+import com.eainde.retry.ExceptionRetryabilityChecker;
+import com.eainde.retry.RetryOrchestrator;
 import com.eainde.retry.RetryQualifierResolver;
 import com.eainde.retry.repository.FailedMessageRepository;
 import com.eainde.retry.scheduler.RetryScheduler;
@@ -85,6 +87,20 @@ public class KafkaRetryAutoConfiguration {
     @ConditionalOnMissingBean
     public KafkaRetryService kafkaRetryService(FailedMessageRepository repository) {
         return new KafkaRetryService(repository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ExceptionRetryabilityChecker exceptionRetryabilityChecker(KafkaRetryProperties properties) {
+        return new ExceptionRetryabilityChecker(properties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public RetryOrchestrator retryOrchestrator(KafkaRetryService retryService,
+                                               RetryQualifierResolver qualifierResolver,
+                                               ExceptionRetryabilityChecker retryabilityChecker) {
+        return new RetryOrchestrator(retryService, qualifierResolver, retryabilityChecker);
     }
 }
 
