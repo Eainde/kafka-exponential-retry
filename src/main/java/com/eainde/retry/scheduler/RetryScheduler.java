@@ -88,4 +88,43 @@ public class RetryScheduler {
                     message.getId(), properties.getMaxRetries());
         }
     }
+
+    /**
+     * Checks if a given exception is retryable based on the configuration.
+     * It checks the entire class hierarchy of the exception.
+     * @param e The exception that occurred.
+     * @return true if the exception should be retried, false otherwise.
+     */
+    private boolean isRetryable(Exception e) {
+        // 1. Check against the non-retryable list first (blacklist takes precedence)
+        for (String exClassName : properties.getNonRetryableExceptions()) {
+            try {
+                Class<?> exClass = Class.forName(exClassName);
+                if (exClass.isInstance(e)) {
+                    return false; // Match found in blacklist, not retryable
+                }
+            } catch (ClassNotFoundException classNotFoundException) {
+                logger.warn("Class not found in non-retryable exception list: {}", exClassName);
+            }
+        }
+
+        // 2. If a retryable list is provided, it acts as a whitelist
+        List<String> retryableExceptions = properties.getRetryableExceptions();
+        if (retryableExceptions != null && !retryableExceptions.isEmpty()) {
+            for (String exClassName : retryableExceptions) {
+                try {
+                    Class<?> exClass = Class.forName(exClassName);
+                    if (exClass.isInstance(e)) {
+                        return true; // Match found in whitelist, is retryable
+                    }
+                } catch (ClassNotFoundException classNotFoundException) {
+                    logger.warn("Class not found in retryable exception list: {}", exClassName);
+                }
+            }
+            return false; // Whitelist exists, but no match was found
+        }
+
+        // 3. Default case: Not in the blacklist and no whitelist is configured, so retry.
+        return true;
+    }
 }
