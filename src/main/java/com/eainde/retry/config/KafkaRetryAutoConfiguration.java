@@ -89,12 +89,32 @@ public class KafkaRetryAutoConfiguration {
         return new KafkaRetryService(repository);
     }
 
+    /**
+     * Creates the ExceptionRetryabilityChecker bean.
+     * This service is a central component responsible for determining if a given exception
+     * is configured as retryable or non-retryable, based on the application properties.
+     * It supports both global and per-handler exception policies.
+     *
+     * @param properties The configuration properties, which contain the exception lists.
+     * @return An instance of ExceptionRetryabilityChecker.
+     */
     @Bean
     @ConditionalOnMissingBean
     public ExceptionRetryabilityChecker exceptionRetryabilityChecker(KafkaRetryProperties properties) {
         return new ExceptionRetryabilityChecker(properties);
     }
 
+    /**
+     * Creates the RetryOrchestrator bean, which is the main entry point for the library's logic.
+     * Consuming applications should inject this service into their error handlers. It encapsulates
+     * all the complex orchestration of resolving handlers, checking exception retryability,
+     * and saving the failed message to the appropriate persistence service.
+     *
+     * @param retryService The service for database operations.
+     * @param qualifierResolver The service for mapping topics to handler beans.
+     * @param retryabilityChecker The service for checking if an exception is retryable.
+     * @return An instance of RetryOrchestrator.
+     */
     @Bean
     @ConditionalOnMissingBean
     public RetryOrchestrator retryOrchestrator(KafkaRetryService retryService,
