@@ -22,6 +22,14 @@ public class ExceptionRetryabilityChecker {
      * @param context The failure context (PRODUCER or CONSUMER).
      * @return true if the exception is retryable, false otherwise.
      */
+    /**
+     * Checks if a given exception is retryable based on the configured policies
+     * for the specific handler and context.
+     * @param cause The root cause exception of the failure.
+     * @param handlerQualifier The name of the handler bean responsible for the message.
+     * @param context The failure context (PRODUCER or CONSUMER).
+     * @return true if the exception is retryable, false otherwise.
+     */
     public boolean isRetryable(Throwable cause, String handlerQualifier, RetryQualifierResolver.FailureContext context) {
         if (cause == null) {
             logger.warn("Exception cause is null for handler '{}'. Considering it retryable by default.", handlerQualifier);
@@ -72,6 +80,8 @@ public class ExceptionRetryabilityChecker {
 
     /**
      * Finds the specific HandlerConfig for a given handler and context from the application properties.
+     * This implementation assumes the `handler-mappings` property is a Map where the keys
+     * are "consumer" and "producer".
      * @param handlerQualifier The name of the handler bean.
      * @param context The failure context (PRODUCER or CONSUMER).
      * @return The HandlerConfig if found, otherwise null.
@@ -80,14 +90,19 @@ public class ExceptionRetryabilityChecker {
         if (properties.getHandlerMappings() == null) {
             return null;
         }
-        if (context == RetryQualifierResolver.FailureContext.CONSUMER && properties.getHandlerMappings().getConsumer() != null) {
-            return properties.getHandlerMappings().getConsumer().get(handlerQualifier);
+
+        // Determine which map to look in ("consumer" or "producer") based on the context.
+        String contextKey = context == RetryQualifierResolver.FailureContext.CONSUMER ? "consumer" : "producer";
+        Map<String, HandlerConfig> contextMappings = properties.getHandlerMappings().get(contextKey);
+
+        if (contextMappings == null) {
+            return null;
         }
-        if (context == RetryQualifierResolver.FailureContext.PRODUCER && properties.getHandlerMappings().getProducer() != null) {
-            return properties.getHandlerMappings().getProducer().get(handlerQualifier);
-        }
-        return null;
+
+        // Look up the specific handler configuration within the correct context map.
+        return contextMappings.get(handlerQualifier);
     }
+
 
     /**
      * Checks if a given Throwable is an instance of any of the class names in the provided list.
