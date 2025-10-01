@@ -14,47 +14,96 @@ public class ExceptionRetryabilityChecker {
         this.properties = properties;
     }
 
-    public boolean isRetryable(Throwable exception, String handlerQualifier, RetryQualifierResolver.FailureContext context) {
-        Optional<HandlerConfig> handlerConfig = getHandlerConfig(handlerQualifier, context);
+    /**
+     * Checks if a given exception is retryable based on the configured policies
+     * for the specific handler and context.
+     * @param cause The root cause exception of the failure.
+     * @param handlerQualifier The name of the handler bean responsible for the message.
+     * @param context The failure context (PRODUCER or CONSUMER).
+     * @return true if the exception is retryable, false otherwise.
+     */
+    public boolean isRetryable(Throwable cause, String handlerQualifier, RetryQualifierResolver.FailureContext context) {
+        if (cause == null) {
+            logger.warn("Exception cause is null for handler '{}'. Considering it retryable by default.", handlerQualifier);
+            return true; // Default to retry if the cause is unknown.
+        }
 
-        // Rule 1: Check non-retryable lists (blacklist). Handler-specific takes precedence.
-        if (exceptionMatches(exception, handlerConfig.map(HandlerConfig::getNonRetryableExceptions).orElse(List.of())) ||
-                exceptionMatches(exception, properties.getNonRetryableExceptions())) {
+        List<String> nonRetryableExceptions;
+        List<String> retryableExceptions;
+
+        // Step 1: Find the most specific configuration available (handler-specific or global).
+        HandlerConfig handlerConfig = findHandlerConfig(handlerQualifier, context);
+
+        if (handlerConfig != null) {
+            logger.debug("Using handler-specific exception rules for handler '{}' in context '{}'.", handlerQualifier, context);
+            nonRetryableExceptions = handlerConfig.getNonRetryableExceptions();
+            retryableExceptions = handlerConfig.getRetryableExceptions();
+        } else {
+            logger.debug("No handler-specific rules found for '{}'. Falling back to global exception rules.", handlerQualifier);
+            nonRetryableExceptions = properties.getNonRetryableExceptions();
+            retryableExceptions = properties.getRetryableExceptions();
+        }
+
+        // Ensure lists are not null to prevent NullPointerExceptions.
+        nonRetryableExceptions = nonRetryableExceptions != null ? nonRetryableExceptions : Collections.emptyList();
+        retryableExceptions = retryableExceptions != null ? retryableExceptions : Collections.emptyList();
+
+        // Step 2: Check the blacklist first, as it always has the highest precedence.
+        if (isExceptionInList(cause, nonRetryableExceptions)) {
+            logger.warn("Exception {} for handler '{}' is in the NON-RETRYABLE list. Decision: DO NOT RETRY.", cause.getClass().getName(), handlerQualifier);
             return false;
         }
 
-        // Rule 2: Check retryable lists (whitelist) if they exist.
-        List<String> handlerRetryable = handlerConfig.map(HandlerConfig::getRetryableExceptions).orElse(List.of());
-        if (!handlerRetryable.isEmpty()) {
-            return exceptionMatches(exception, handlerRetryable);
+        // Step 3: If a whitelist is defined, the exception MUST be on it to be retried.
+        if (!retryableExceptions.isEmpty()) {
+            if (isExceptionInList(cause, retryableExceptions)) {
+                logger.info("Exception {} for handler '{}' is in the RETRYABLE list. Decision: RETRY.", cause.getClass().getName(), handlerQualifier);
+                return true;
+            } else {
+                logger.warn("Exception {} for handler '{}' is NOT in the defined RETRYABLE list. Decision: DO NOT RETRY.", cause.getClass().getName(), handlerQualifier);
+                return false;
+            }
         }
 
-        List<String> globalRetryable = properties.getRetryableExceptions();
-        if (!globalRetryable.isEmpty()) {
-            return exceptionMatches(exception, globalRetryable);
-        }
-
-        // Rule 3: If no whitelists are defined, retry everything not on a blacklist.
+        // Step 4: If no whitelist is defined and it's not on the blacklist, retry by default.
+        logger.info("Exception {} for handler '{}' is not blacklisted and no specific whitelist is defined. Decision: RETRY by default.", cause.getClass().getName(), handlerQualifier);
         return true;
     }
 
-    private Optional<HandlerConfig> getHandlerConfig(String handlerQualifier, RetryQualifierResolver.FailureContext context) {
-        Map<String, HandlerConfig> contextMappings = context == RetryQualifierResolver.FailureContext.CONSUMER ?
-                properties.getHandlerMappings().get("consumer") :
-                properties.getHandlerMappings().get("producer");
-
-        return Optional.ofNullable(contextMappings).map(m -> m.get(handlerQualifier));
+    /**
+     * Finds the specific HandlerConfig for a given handler and context from the application properties.
+     * @param handlerQualifier The name of the handler bean.
+     * @param context The failure context (PRODUCER or CONSUMER).
+     * @return The HandlerConfig if found, otherwise null.
+     */
+    private HandlerConfig findHandlerConfig(String handlerQualifier, RetryQualifierResolver.FailureContext context) {
+        if (properties.getHandlerMappings() == null) {
+            return null;
+        }
+        if (context == RetryQualifierResolver.FailureContext.CONSUMER && properties.getHandlerMappings().getConsumer() != null) {
+            return properties.getHandlerMappings().getConsumer().get(handlerQualifier);
+        }
+        if (context == RetryQualifierResolver.FailureContext.PRODUCER && properties.getHandlerMappings().getProducer() != null) {
+            return properties.getHandlerMappings().getProducer().get(handlerQualifier);
+        }
+        return null;
     }
 
-    private boolean exceptionMatches(Throwable exception, List<String> exceptionClassNames) {
-        if (exception == null || exceptionClassNames == null || exceptionClassNames.isEmpty()) {
-            return false;
-        }
-        return exceptionClassNames.stream()
-                .anyMatch(name -> {
+    /**
+     * Checks if a given Throwable is an instance of any of the class names in the provided list.
+     * @param cause The exception to check.
+     * @param exceptionList A list of fully qualified class names.
+     * @return true if the exception is an instance of a class in the list, false otherwise.
+     */
+    private boolean isExceptionInList(Throwable cause, List<String> exceptionList) {
+        return exceptionList.stream()
+                .anyMatch(exceptionClassName -> {
                     try {
-                        return Class.forName(name).isInstance(exception);
+                        Class<?> exceptionClass = Class.forName(exceptionClassName);
+                        // isInstance() correctly handles subclasses.
+                        return exceptionClass.isInstance(cause);
                     } catch (ClassNotFoundException e) {
+                        logger.error("Configured exception class not found on classpath: {}", exceptionClassName, e);
                         return false;
                     }
                 });
