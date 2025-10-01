@@ -91,5 +91,48 @@ public class OrderEventsMessageHandler implements RetryMessageHandler {
     }
 }
 
-
 ```
+## Exception Decision Flow
+When an error occurs for a message from a specific topic (e.g., order-events.rt), the RetryOrchestrator does the following:
+
+### Step 1: Check for Handler-Specific Rules
+The system first looks for a configuration block specific to that message's handler (e.g., orderEventsHandler).
+
+- If a handler-specific configuration exists:
+
+The global retryable-exceptions and non-retryable-exceptions lists are completely ignored for this handler. The logic proceeds using only the handler's local rules.
+
+- If no handler-specific configuration exists:
+
+The system falls back and uses the global retryable-exceptions and non-retryable-exceptions lists.
+
+### Step 2: Check the Blacklist (non-retryable-exceptions)
+Whether using the handler-specific rules or the global rules, the non-retryable-exceptions list is always checked first.
+
+- If the exception matches this list:
+
+The decision is final: DO NOT RETRY. The message is immediately marked as a PERMANENT_FAILURE. This list has the highest precedence.
+
+- If the exception does not match:
+
+The logic proceeds to the next step.
+
+### Step 3: Check the Whitelist (retryable-exceptions)
+This final check determines if the exception is explicitly allowed.
+
+- If the retryable-exceptions list is defined (not empty):
+
+The exception must be on this list to be retried.
+
+If it's on the list -> RETRY.
+
+If it's not on the list -> DO NOT RETRY (mark as PERMANENT_FAILURE).
+
+- If the retryable-exceptions list is NOT defined (it's empty or omitted):
+
+The exception is considered retryable by default (since it already passed the blacklist check). The decision is to RETRY.
+
+**Summary of Precedence**
+Handler-Specific Rules > Global Rules (A local config always overrides the global one).
+
+non-retryable-exceptions > retryable-exceptions (The blacklist always wins).
